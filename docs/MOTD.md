@@ -25,6 +25,8 @@ Purpose-built VMs have specific operational characteristics that make custom MOT
 
 ### Visual Layout
 
+When you first SSH into this system, instead of seeing the generic Ubuntu MOTD, you will now see a structured, purpose-built report like this just before you get your shell prompt:
+
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║        Standard Notes Server - notes.example.com             ║
@@ -70,6 +72,8 @@ Purpose-built VMs have specific operational characteristics that make custom MOT
   Swap usage:   0%
 ═══════════════════════════════════════════════════════════════
 ```
+
+For an admin or operator logging in, this Message of the Day (MOTD) provides immediate insight into the system's health and status.
 
 ### Section Priority
 
