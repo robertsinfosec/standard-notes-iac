@@ -1,0 +1,97 @@
+---
+# App Service deployment tasks
+# Deploys Standard Notes, Traefik, MySQL, Redis, and Localstack
+
+- name: Create application directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_service_user }}"
+    group: "{{ app_service_group }}"
+    mode: '0750'
+  loop:
+    - "{{ app_service_install_dir }}"
+    - "{{ app_service_install_dir }}/logs"
+    - "{{ app_service_install_dir }}/uploads"
+    - "{{ app_service_install_dir }}/data/mysql"
+    - "{{ app_service_install_dir }}/data/redis"
+    - "{{ app_service_install_dir }}/data/import"
+    - "{{ app_service_install_dir }}/traefik"
+
+- name: Create Traefik acme.json with restrictive permissions
+  ansible.builtin.file:
+    path: "{{ app_service_install_dir }}/traefik/acme.json"
+    state: touch
+    owner: root
+    group: root
+    mode: '0600'
+    modification_time: preserve
+    access_time: preserve
+
+- name: Deploy Traefik configuration
+  ansible.builtin.template:
+    src: traefik.yaml.j2
+    dest: "{{ app_service_install_dir }}/traefik/traefik.yaml"
+    owner: "{{ app_service_user }}"
+    group: "{{ app_service_group }}"
+    mode: '0640'
+  notify: Restart standard-notes
+
+- name: Deploy docker-compose.yaml
+  ansible.builtin.template:
+    src: docker-compose.yaml.j2
+    dest: "{{ app_service_install_dir }}/docker-compose.yaml"
+    owner: "{{ app_service_user }}"
+    group: "{{ app_service_group }}"
+    mode: '0640'
+  notify: Restart standard-notes
+
+- name: Deploy .env configuration
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_service_install_dir }}/.env"
+    owner: "{{ app_service_user }}"
+    group: "{{ app_service_group }}"
+    mode: '0600'
+  notify: Restart standard-notes
+
+- name: Copy Localstack bootstrap script
+  ansible.builtin.copy:
+    src: localstack_bootstrap.sh
+    dest: "{{ app_service_install_dir }}/localstack_bootstrap.sh"
+    owner: "{{ app_service_user }}"
+    group: "{{ app_service_group }}"
+    mode: '0755'
+
+- name: Create systemd service for Standard Notes
+  ansible.builtin.template:
+    src: standard-notes.service.j2
+    dest: /etc/systemd/system/standard-notes.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart standard-notes
+
+- name: Enable Standard Notes systemd service
+  ansible.builtin.systemd:
+    name: standard-notes
+    enabled: true
+    daemon_reload: true
+
+- name: Start Standard Notes service
+  ansible.builtin.systemd:
+    name: standard-notes
+    state: started
+
+- name: Wait for Standard Notes to become healthy
+  ansible.builtin.uri:
+    url: "https://{{ app_service_domain }}"
+    status_code: [200, 301, 302, 404, 503]
+    validate_certs: false
+  register: app_service_health_check_result
+  until: app_service_health_check_result.status in [200, 301, 302, 404, 503]
+  retries: 30
+  delay: 10
+  failed_when: false

@@ -1,0 +1,19 @@
+---
+# Docker Engine role default variables
+
+# Docker version (use latest from official Docker repo)
+docker_engine_edition: ce
+docker_engine_package: "docker-{{ docker_engine_edition }}"
+
+# Docker Compose version
+docker_engine_compose_version: "v2.24.5"
+
+# Docker daemon configuration
+docker_engine_log_driver: "json-file"
+docker_engine_log_max_size: "10m"
+docker_engine_log_max_file: "3"
+docker_engine_storage_driver: "overlay2"
+
+# Service-runner user (gets added to docker group)
+docker_engine_users:
+  - service-runner

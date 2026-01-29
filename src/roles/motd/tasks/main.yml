@@ -1,0 +1,100 @@
+---
+# MOTD role tasks
+# Deploys dynamic MOTD system per docs/MOTD.md
+
+- name: Create MOTD cache directory
+  ansible.builtin.file:
+    path: "{{ motd_cache_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - motd
+
+- name: Create MOTD helpers directory
+  ansible.builtin.file:
+    path: "{{ motd_helpers_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - motd
+
+- name: Deploy MOTD helper scripts
+  ansible.builtin.copy:
+    src: "motd-helpers/{{ item }}"
+    dest: "{{ motd_helpers_directory }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - colors.sh
+    - formatters.sh
+    - timeutils.sh
+  tags:
+    - motd
+
+- name: Remove default Ubuntu MOTD scripts
+  ansible.builtin.file:
+    path: "/etc/update-motd.d/{{ item }}"
+    state: absent
+  loop:
+    - 00-header
+    - 10-help-text
+    - 50-motd-news
+    - 80-esm
+    - 80-livepatch
+    - 90-updates-available
+    - 91-release-upgrade
+    - 92-unattended-upgrades
+    - 95-hwe-eol
+    - 97-overlayroot
+    - 98-fsck-at-reboot
+    - 98-reboot-required
+  failed_when: false
+  tags:
+    - motd
+
+- name: Deploy MOTD scripts
+  ansible.builtin.template:
+    src: "{{ item.template }}"
+    dest: "/etc/update-motd.d/{{ item.name }}"
+    owner: root
+    group: root
+    mode: '0755'
+    validate: bash -n %s
+  loop:
+    - name: "00-header"
+      template: "00-header.j2"
+    - name: "10-service-status"
+      template: "10-service-status.j2"
+    - name: "20-resources"
+      template: "20-resources.j2"
+    - name: "30-backups"
+      template: "30-backups.j2"
+    - name: "40-security"
+      template: "40-security.j2"
+    - name: "50-commands"
+      template: "50-commands.j2"
+    - name: "99-footer"
+      template: "99-footer.j2"
+  tags:
+    - motd
+
+- name: Disable MOTD news service
+  ansible.builtin.systemd:
+    name: motd-news.timer
+    enabled: false
+    state: stopped
+  failed_when: false
+  tags:
+    - motd
+
+- name: Clear MOTD news cache
+  ansible.builtin.file:
+    path: /var/cache/motd-news
+    state: absent
+  tags:
+    - motd

@@ -1,0 +1,46 @@
+# Ansible managed - Standard Notes IaC
+# systemd service unit for Standard Notes self-hosted deployment
+
+[Unit]
+Description=Standard Notes Self-Hosted Service
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ app_service_user }}
+Group={{ app_service_group }}
+SupplementaryGroups=docker
+WorkingDirectory={{ app_service_install_dir }}
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME={{ app_service_install_dir }}"
+
+# Pre-start: Pull latest images (important when using :latest tags)
+ExecStartPre=/usr/bin/docker compose pull
+
+# Start command (blocking - systemd monitors container health)
+ExecStart=/usr/bin/docker compose up
+
+# Stop command (graceful shutdown)
+ExecStop=/usr/bin/docker compose down
+
+# Restart policy
+Restart=always
+RestartSec=10s
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ app_service_install_dir }}
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

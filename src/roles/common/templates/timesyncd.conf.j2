@@ -1,0 +1,6 @@
+# Ansible managed - Standard Notes IaC
+# NTP configuration for systemd-timesyncd
+
+[Time]
+NTP={{ common_ntp_servers | join(' ') }}
+FallbackNTP=ntp.ubuntu.com

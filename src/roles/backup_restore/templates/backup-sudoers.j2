@@ -1,0 +1,10 @@
+# Ansible managed - Standard Notes IaC
+# Sudoers configuration for {{ backup_restore_user }}
+# Allows limited sudo access for backup operations
+
+# User specification
+{{ backup_restore_user }} ALL=(ALL) NOPASSWD: /usr/bin/docker compose down, /usr/bin/docker compose up -d, /usr/bin/docker compose ps, /usr/local/bin/backup/sn-backup.sh, /usr/local/bin/backup/prune-backups.sh
+
+# Security settings
+Defaults:{{ backup_restore_user }} !requiretty
+Defaults:{{ backup_restore_user }} env_keep += "PATH"

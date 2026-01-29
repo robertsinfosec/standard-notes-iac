@@ -1,0 +1,37 @@
+// Ansible managed - Standard Notes IaC
+// Unattended upgrades configuration
+// Mode: {{ common_unattended_upgrades_mode }}
+
+Unattended-Upgrade::Allowed-Origins {
+{% if common_unattended_upgrades_mode == 'security-only' %}
+    // Security updates only (recommended for production)
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+{% elif common_unattended_upgrades_mode == 'all' %}
+    // All updates (security + regular updates)
+    "${distro_id}:${distro_codename}";
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}:${distro_codename}-updates";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+{% endif %}
+};
+
+Unattended-Upgrade::Package-Blacklist {
+};
+
+Unattended-Upgrade::DevRelease "false";
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::InstallOnShutdown "false";
+Unattended-Upgrade::Mail "root";
+Unattended-Upgrade::MailReport "on-change";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "{{ 'true' if common_unattended_upgrades_automatic_reboot else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "{{ 'true' if common_unattended_upgrades_automatic_reboot else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ common_unattended_upgrades_automatic_reboot_time }}";
+Unattended-Upgrade::SyslogEnable "true";
+Unattended-Upgrade::SyslogFacility "daemon";

@@ -1,0 +1,40 @@
+---
+# Common role default variables
+
+# Timezone configuration
+common_timezone: "{{ lookup('env', 'TZ') | default('UTC', true) }}"
+
+# System packages to install
+common_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - git
+  - htop
+  - btop
+  - vim
+  - wget
+  - unzip
+  - tar
+  - net-tools
+  - dnsutils
+
+# NTP configuration
+common_ntp_enabled: true
+common_ntp_servers:
+  - 0.ubuntu.pool.ntp.org
+  - 1.ubuntu.pool.ntp.org
+  - 2.ubuntu.pool.ntp.org
+  - 3.ubuntu.pool.ntp.org
+
+# Unattended upgrades configuration
+# Mode: security-only (default), all, or none
+# - security-only: Only security updates (recommended for production)
+# - all: Security and regular updates
+# - none: Disable automatic updates (not recommended)
+common_unattended_upgrades_mode: "{{ lookup('env', 'UNATTENDED_UPGRADES') | default('security-only', true) }}"
+common_unattended_upgrades_automatic_reboot: true
+common_unattended_upgrades_automatic_reboot_time: "03:00"

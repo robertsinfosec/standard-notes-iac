@@ -1,0 +1,22 @@
+---
+# Firewall role default variables
+# See docs/SECURITY_DESIGN.md for firewall rules
+
+firewall_ufw_default_incoming_policy: deny
+firewall_ufw_default_outgoing_policy: allow
+firewall_ufw_default_forward_policy: deny
+
+# Allowed ports (SSH, HTTP, HTTPS)
+firewall_ufw_allowed_ports:
+  - port: 22
+    proto: tcp
+    comment: "SSH"
+  - port: 80
+    proto: tcp
+    comment: "HTTP (ACME challenges, redirects to HTTPS)"
+  - port: 443
+    proto: tcp
+    comment: "HTTPS (Traefik TLS termination)"
+
+# Rate limiting for SSH (protection against brute force)
+firewall_ufw_rate_limit_ssh: true

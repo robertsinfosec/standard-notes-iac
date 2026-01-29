@@ -1,0 +1,26 @@
+---
+# SSH hardening role default variables
+# See docs/SECURITY_DESIGN.md for SSH security controls
+
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+ssh_pubkey_authentication: "yes"
+ssh_permit_empty_passwords: "no"
+ssh_challenge_response_authentication: "no"
+ssh_x11_forwarding: "no"
+ssh_max_auth_tries: 3
+ssh_max_sessions: 10
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 2
+ssh_allow_tcp_forwarding: "no"
+ssh_allow_agent_forwarding: "no"
+ssh_allow_stream_local_forwarding: "no"
+ssh_log_level: "VERBOSE"
+
+# Allowed users (service-deployer for management, service-backup for backups)
+# Note: root is excluded by PermitRootLogin setting, not AllowUsers
+ssh_allowed_users:
+  - root
+  - service-deployer
+  - service-backup

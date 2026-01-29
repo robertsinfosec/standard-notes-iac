@@ -1,0 +1,97 @@
+---
+# User account creation and configuration tasks
+# Implements user separation per docs/SECURITY_DESIGN.md Section 4
+
+- name: Create standard-notes shared group
+  ansible.builtin.group:
+    name: "{{ users_standard_notes_group }}"
+    state: present
+    system: true
+
+- name: Create service-deployer user (deployment & admin)
+  ansible.builtin.user:
+    name: "{{ users_service_deployer_username }}"
+    comment: "Standard Notes deployment and administration"
+    shell: /bin/bash
+    groups:
+      - sudo
+      - "{{ users_standard_notes_group }}"
+    append: true
+    create_home: true
+    state: present
+
+- name: Create .ssh directory for service-deployer
+  ansible.builtin.file:
+    path: "/home/{{ users_service_deployer_username }}/.ssh"
+    state: directory
+    owner: "{{ users_service_deployer_username }}"
+    group: "{{ users_service_deployer_username }}"
+    mode: '0700'
+
+- name: Add SSH public key for service-deployer
+  ansible.posix.authorized_key:
+    user: "{{ users_service_deployer_username }}"
+    key: "{{ users_service_deployer_ssh_key }}"
+    state: present
+    exclusive: false
+  when: users_service_deployer_ssh_key | length > 0
+
+- name: Allow service-deployer full sudo access
+  ansible.builtin.copy:
+    content: "{{ users_service_deployer_username }} ALL=(ALL) NOPASSWD:ALL\n"
+    dest: "/etc/sudoers.d/{{ users_service_deployer_username }}"
+    mode: '0440'
+    owner: root
+    group: root
+    validate: 'visudo -cf %s'
+
+- name: Create service-runner user (runs application)
+  ansible.builtin.user:
+    name: "{{ users_service_runner_username }}"
+    comment: "Standard Notes application runtime user"
+    shell: "{{ users_service_runner_shell }}"
+    groups:
+      - "{{ users_standard_notes_group }}"
+    append: true
+    create_home: true
+    system: true
+    state: present
+
+- name: Allow service-runner limited sudo for systemctl
+  ansible.builtin.copy:
+    content: |
+      {{ users_service_runner_username }} ALL=(ALL) NOPASSWD: /bin/systemctl start standard-notes
+      {{ users_service_runner_username }} ALL=(ALL) NOPASSWD: /bin/systemctl stop standard-notes
+      {{ users_service_runner_username }} ALL=(ALL) NOPASSWD: /bin/systemctl restart standard-notes
+      {{ users_service_runner_username }} ALL=(ALL) NOPASSWD: /bin/systemctl status standard-notes
+      {{ users_service_runner_username }} ALL=(ALL) NOPASSWD: /bin/systemctl reload standard-notes
+      {{ users_service_runner_username }} ALL=(ALL) NOPASSWD: /usr/bin/docker compose *
+    dest: "/etc/sudoers.d/{{ users_service_runner_username }}"
+    mode: '0440'
+    owner: root
+    group: root
+    validate: 'visudo -cf %s'
+
+- name: Create service-backup user (backup operations)
+  ansible.builtin.user:
+    name: "{{ users_service_backup_username }}"
+    comment: "Standard Notes backup operations"
+    shell: "{{ users_service_backup_shell }}"
+    groups:
+      - "{{ users_standard_notes_group }}"
+    append: true
+    create_home: true
+    system: true
+    state: present
+
+- name: Allow service-backup limited sudo for backup scripts
+  ansible.builtin.copy:
+    content: |
+      {{ users_service_backup_username }} ALL=(ALL) NOPASSWD: /usr/local/bin/backup/sn-backup.sh
+      {{ users_service_backup_username }} ALL=(ALL) NOPASSWD: /usr/local/bin/backup/prune-backups.sh
+      {{ users_service_backup_username }} ALL=(ALL) NOPASSWD: /usr/bin/docker compose exec *
+    dest: "/etc/sudoers.d/{{ users_service_backup_username }}"
+    mode: '0440'
+    owner: root
+    group: root
+    validate: 'visudo -cf %s'

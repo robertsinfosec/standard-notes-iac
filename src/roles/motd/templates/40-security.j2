@@ -1,0 +1,114 @@
+#!/bin/bash
+# Ansible managed - MOTD security section
+# Generated from roles/motd/templates/40-security.j2
+
+# Load helpers
+source /usr/local/bin/motd-helpers/colors.sh 2>/dev/null || true
+source /usr/local/bin/motd-helpers/formatters.sh 2>/dev/null || true
+
+# Configuration
+DOMAIN="{{ motd_domain }}"
+TIMEOUT={{ motd_script_timeout }}
+CERT_WARN_DAYS={{ motd_cert_warning_days }}
+CERT_CRIT_DAYS={{ motd_cert_critical_days }}
+CERT_CACHE="{{ motd_cache_directory }}/cert-expiry"
+CERT_CACHE_MAX_AGE={{ motd_cert_cache_max_age }}
+
+# Print section header
+print_section_header "SECURITY"
+
+# SSH ban attempts (fail2ban) - check currently banned IPs, not log history
+if command -v fail2ban-client >/dev/null 2>&1; then
+    # Get current banned IP count from fail2ban (source of truth)
+    ban_count=$(timeout "$TIMEOUT" fail2ban-client status sshd 2>/dev/null | grep -oP 'Currently banned:\s*\K\d+' | head -1 | tr -d '\n' || echo "0")
+    
+    # Fallback to iptables if fail2ban-client doesn't work
+    if [[ "$ban_count" == "0" || -z "$ban_count" ]]; then
+        ban_count=$(timeout "$TIMEOUT" iptables -L f2b-sshd -n 2>/dev/null | grep -cE "REJECT|DROP" | tr -d '\n' | tr -d '\n' || echo "0")
+    fi
+    
+    # Ensure ban_count is a clean integer
+    ban_count=${ban_count:-0}
+    ban_count=$(echo "$ban_count" | tr -d '\n' | tr -d ' ')
+    
+    if (( ban_count == 0 )); then
+        printf "  %-17s %b\n" "SSH Attempts:" "${GREEN}No attacks detected (24h)${NC}"
+    elif (( ban_count < 10 )); then
+        printf "  %-17s %b\n" "SSH Attempts:" "${YELLOW}${ban_count} IPs banned (last 24h) ${SYM_WARNING}${NC}"
+    else
+        printf "  %-17s %b\n" "SSH Attempts:" "${RED}${ban_count} IPs banned (last 24h) ${SYM_ERROR}${NC}"
+    fi
+else
+    printf "  %-17s %s\n" "SSH Attempts:" "${YELLOW}${SYM_WARNING}${NC} Unable to check"
+fi
+
+# Certificate expiry
+check_certificate() {
+    # Try to get certificate expiry from running service
+    if cert_expiry=$(timeout "$TIMEOUT" echo | openssl s_client -connect localhost:443 -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null); then
+        # Extract date from "notAfter=Apr  8 14:32:19 2026 GMT"
+        expiry_date=$(echo "$cert_expiry" | cut -d= -f2)
+        echo "$expiry_date"
+        return 0
+    fi
+    return 1
+}
+
+# Use cached certificate data if recent, otherwise fetch fresh
+if [[ -f "$CERT_CACHE" ]]; then
+    cache_age=$(( $(date +%s) - $(stat -c %Y "$CERT_CACHE" 2>/dev/null || echo 0) ))
+    if (( cache_age < CERT_CACHE_MAX_AGE )); then
+        cert_expiry_date=$(cat "$CERT_CACHE")
+    else
+        cert_expiry_date=$(check_certificate)
+        if [[ -n "$cert_expiry_date" ]]; then
+            mkdir -p "$(dirname "$CERT_CACHE")" 2>/dev/null
+            echo "$cert_expiry_date" > "$CERT_CACHE" 2>/dev/null || true
+        fi
+    fi
+else
+    cert_expiry_date=$(check_certificate)
+    if [[ -n "$cert_expiry_date" ]]; then
+        mkdir -p "$(dirname "$CERT_CACHE")" 2>/dev/null
+        echo "$cert_expiry_date" > "$CERT_CACHE" 2>/dev/null || true
+    fi
+fi
+
+if [[ -n "$cert_expiry_date" ]]; then
+    # Calculate days until expiry
+    expiry_epoch=$(date -d "$cert_expiry_date" +%s 2>/dev/null)
+    now_epoch=$(date +%s)
+    
+    if [[ -n "$expiry_epoch" ]] && (( expiry_epoch > 0 )); then
+        days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+        
+        # Format expiry date for display
+        expiry_display=$(date -d "$cert_expiry_date" "+%Y-%m-%d" 2>/dev/null)
+        
+        # Color code based on days remaining
+        if (( days_left > CERT_WARN_DAYS )); then
+            cert_status="${GREEN}Valid until ${expiry_display} (${days_left} days) ${SYM_SUCCESS}${NC}"
+        elif (( days_left > CERT_CRIT_DAYS )); then
+            cert_status="${YELLOW}Expires ${expiry_display} (${days_left} days) ${SYM_WARNING}${NC}"
+        elif (( days_left >= 0 )); then
+            cert_status="${RED}Expires ${expiry_display} (${days_left} days) ${SYM_ERROR}${NC}"
+        else
+            days_expired=$(( -days_left ))
+            cert_status="${RED}EXPIRED ${days_expired} days ago ${SYM_ERROR}${NC}"
+        fi
+        
+        printf "  %-17s %b\n" "Certificate:" "$cert_status"
+    else
+        printf "  %-17s %s\n" "Certificate:" "${YELLOW}${SYM_WARNING}${NC} Unable to parse expiry date"
+    fi
+else
+    printf "  %-17s %s\n" "Certificate:" "${YELLOW}${SYM_WARNING}${NC} Unable to check (service may not be running)"
+fi
+
+# Last login information
+if last_login=$(last -1 -w "$USER" 2>/dev/null | head -1 | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/) print $i}'); then
+    if [[ -n "$last_login" ]]; then
+        last_login_time=$(last -1 -w "$USER" 2>/dev/null | head -1 | awk '{print $5, $6, $7, $8}')
+        printf "  %-17s %s from %s at %s\n" "Last Login:" "$USER" "$last_login" "$last_login_time"
+    fi
+fi

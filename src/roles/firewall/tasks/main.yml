@@ -1,0 +1,53 @@
+---
+# Firewall (UFW) configuration tasks
+# Implements network security controls per docs/SECURITY_DESIGN.md Section 2
+
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Reset UFW to default configuration
+  community.general.ufw:
+    state: reset
+  notify: Reload ufw
+
+- name: Set UFW default policies
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: 'incoming', policy: deny }
+    - { direction: 'outgoing', policy: allow }
+    - { direction: 'routed', policy: deny }
+
+- name: Allow SSH with rate limiting
+  community.general.ufw:
+    rule: limit
+    port: '22'
+    proto: tcp
+    comment: 'SSH with rate limiting'
+  when: firewall_ufw_rate_limit_ssh
+
+- name: Allow required ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ firewall_ufw_allowed_ports }}"
+  when: not (firewall_ufw_rate_limit_ssh and item.port == 22)
+
+- name: Enable UFW logging
+  community.general.ufw:
+    logging: 'on'
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Ensure UFW is started and enabled at boot
+  ansible.builtin.systemd:
+    name: ufw
+    enabled: true
+    state: started

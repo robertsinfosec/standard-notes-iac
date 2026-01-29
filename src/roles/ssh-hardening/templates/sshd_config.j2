@@ -1,0 +1,64 @@
+# Ansible managed - Standard Notes IaC
+# SSH daemon configuration - hardened for production
+# See docs/SECURITY_DESIGN.md for security rationale
+
+# Network settings
+Port {{ ssh_port }}
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Authentication
+PermitRootLogin {{ ssh_permit_root_login }}
+PubkeyAuthentication {{ ssh_pubkey_authentication }}
+PasswordAuthentication {{ ssh_password_authentication }}
+PermitEmptyPasswords {{ ssh_permit_empty_passwords }}
+ChallengeResponseAuthentication {{ ssh_challenge_response_authentication }}
+UsePAM yes
+
+# Restrict to specific users
+AllowUsers {{ ssh_allowed_users | join(' ') }}
+
+# Security hardening
+MaxAuthTries {{ ssh_max_auth_tries }}
+MaxSessions {{ ssh_max_sessions }}
+StrictModes yes
+HostbasedAuthentication no
+IgnoreRhosts yes
+IgnoreUserKnownHosts yes
+
+# Logging
+SyslogFacility AUTH
+LogLevel {{ ssh_log_level }}
+
+# Forwarding and tunneling
+X11Forwarding {{ ssh_x11_forwarding }}
+AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
+AllowAgentForwarding {{ ssh_allow_agent_forwarding }}
+AllowStreamLocalForwarding {{ ssh_allow_stream_local_forwarding }}
+PermitTunnel no
+
+# Connection management
+ClientAliveInterval {{ ssh_client_alive_interval }}
+ClientAliveCountMax {{ ssh_client_alive_count_max }}
+TCPKeepAlive yes
+Compression no
+
+# Cryptography
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256
+HostKeyAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256
+
+# Subsystems
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Banner warning
+Banner /etc/issue.net
+
+# Accept locale environment variables
+AcceptEnv LANG LC_*
+
+# Print MOTD and last login
+PrintMotd no
+PrintLastLog yes

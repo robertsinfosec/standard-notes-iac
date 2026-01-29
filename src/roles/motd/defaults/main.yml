@@ -1,0 +1,69 @@
+---
+# MOTD role default variables
+# See docs/MOTD.md for complete specification
+
+# Server identification
+motd_hostname: "Standard Notes Server"
+motd_domain: "{{ lookup('env', 'DOMAIN') | default('localhost', true) }}"
+
+# Application paths
+motd_app_directory: /opt/standard-notes
+motd_compose_file: /opt/standard-notes/docker-compose.yaml
+motd_systemd_service: standard-notes.service
+motd_backup_directory: /var/backups/standard-notes
+
+# Service display configuration
+# Each service maps friendly name to docker compose service name
+motd_services:
+  - name: "Web UI"
+    service: web
+    container: web_self_hosted
+  - name: "API Server"
+    service: server
+    container: server_self_hosted
+  - name: "MySQL"
+    service: db
+    container: db_self_hosted
+  - name: "Redis Cache"
+    service: cache
+    container: cache_self_hosted
+  - name: "Traefik"
+    service: traefik
+    container: traefik_standard_notes
+  - name: "LocalStack"
+    service: localstack
+    container: localstack_self_hosted
+    optional: true
+
+# Quick command references
+motd_quick_commands:
+  - label: "Service logs"
+    command: "docker compose -f {{ motd_compose_file }} logs -f"
+  - label: "Service status"
+    command: "systemctl status {{ motd_systemd_service }}"
+  - label: "Restart"
+    command: "sudo systemctl restart {{ motd_systemd_service }}"
+  - label: "Run backup"
+    command: "sudo /usr/local/bin/backup/sn-backup.sh"
+
+# Resource usage thresholds (percentages)
+motd_disk_warning_threshold: 70
+motd_disk_critical_threshold: 85
+motd_memory_warning_threshold: 75
+motd_memory_critical_threshold: 90
+
+# Security thresholds
+motd_cert_warning_days: 30
+motd_cert_critical_days: 15
+motd_security_updates_warning: 1
+motd_security_updates_critical: 10
+motd_total_updates_warning: 20
+motd_total_updates_critical: 50
+
+# Performance settings
+motd_script_timeout: 2
+motd_cache_directory: /var/cache/motd
+motd_cert_cache_max_age: 3600
+
+# Helper script location
+motd_helpers_directory: /usr/local/bin/motd-helpers

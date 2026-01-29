@@ -1,0 +1,158 @@
+# Ansible managed - Standard Notes IaC
+# Docker Compose configuration for Standard Notes stack
+# Based on official standardnotes/server docker-compose.example.yml with Traefik added
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik_standard_notes
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ./traefik/acme.json:/acme.json
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - standardnotes_self_hosted
+    environment:
+      - CLOUDFLARE_DNS_API_TOKEN={{ app_service_cf_dns_api_token }}
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  server:
+    image: standardnotes/server:latest
+    env_file: .env
+    container_name: server_self_hosted
+    restart: unless-stopped
+    expose:
+      - 3000
+      - 3104
+    volumes:
+      - ./logs:/var/lib/server/logs
+      - ./uploads:/opt/server/packages/files/dist/uploads
+    networks:
+      - standardnotes_self_hosted
+    labels:
+      - "traefik.enable=true"
+      # API domain routing
+      - "traefik.http.routers.standardnotes-api.rule=Host(`{{ app_service_api_domain }}`)"
+      - "traefik.http.routers.standardnotes-api.entrypoints=websecure"
+      - "traefik.http.routers.standardnotes-api.tls=true"
+      - "traefik.http.routers.standardnotes-api.tls.certresolver=cloudflare"
+      - "traefik.http.routers.standardnotes-api.service=standardnotes-api"
+      - "traefik.http.services.standardnotes-api.loadbalancer.server.port=3000"
+      # HTTP to HTTPS redirect for API
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.standardnotes-api-http.rule=Host(`{{ app_service_api_domain }}`)"
+      - "traefik.http.routers.standardnotes-api-http.entrypoints=web"
+      - "traefik.http.routers.standardnotes-api-http.middlewares=redirect-to-https"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_started
+      localstack:
+        condition: service_started
+
+  web:
+    image: standardnotes/web:latest
+    container_name: web_self_hosted
+    restart: unless-stopped
+    expose:
+      - 80
+    networks:
+      - standardnotes_self_hosted
+    environment:
+      - DEFAULT_SYNC_SERVER=https://{{ app_service_api_domain }}
+    labels:
+      - "traefik.enable=true"
+      # Main domain routing (web frontend)
+      - "traefik.http.routers.standardnotes-web.rule=Host(`{{ app_service_domain }}`) || Host(`www.{{ app_service_domain }}`)"
+      - "traefik.http.routers.standardnotes-web.entrypoints=websecure"
+      - "traefik.http.routers.standardnotes-web.tls=true"
+      - "traefik.http.routers.standardnotes-web.tls.certresolver=cloudflare"
+      - "traefik.http.routers.standardnotes-web.service=standardnotes-web"
+      - "traefik.http.services.standardnotes-web.loadbalancer.server.port=80"
+      # HTTP to HTTPS redirect for web
+      - "traefik.http.routers.standardnotes-web-http.rule=Host(`{{ app_service_domain }}`) || Host(`www.{{ app_service_domain }}`)"
+      - "traefik.http.routers.standardnotes-web-http.entrypoints=web"
+      - "traefik.http.routers.standardnotes-web-http.middlewares=redirect-to-https"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - server
+
+  localstack:
+    image: localstack/localstack:2.3
+    container_name: localstack_self_hosted
+    expose:
+      - 4566
+    restart: unless-stopped
+    environment:
+      - SERVICES=sns,sqs
+      - HOSTNAME_EXTERNAL=localstack
+      - LS_LOG=warn
+    volumes:
+      - ./localstack_bootstrap.sh:/etc/localstack/init/ready.d/localstack_bootstrap.sh:ro
+    networks:
+      - standardnotes_self_hosted
+
+  db:
+    image: mysql:8
+    container_name: db_self_hosted
+    environment:
+      - MYSQL_DATABASE={{ app_service_mysql_database }}
+      - MYSQL_USER={{ app_service_mysql_user }}
+      - MYSQL_ROOT_PASSWORD={{ app_service_mysql_root_password }}
+      - MYSQL_PASSWORD={{ app_service_mysql_password }}
+    expose:
+      - 3306
+    restart: unless-stopped
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./data/import:/docker-entrypoint-initdb.d
+    networks:
+      - standardnotes_self_hosted
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p{{ app_service_mysql_root_password }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  cache:
+    image: redis:6.0-alpine
+    container_name: cache_self_hosted
+    volumes:
+      - ./data/redis:/data
+    expose:
+      - 6379
+    restart: unless-stopped
+    networks:
+      - standardnotes_self_hosted
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  standardnotes_self_hosted:
+    name: standardnotes_self_hosted

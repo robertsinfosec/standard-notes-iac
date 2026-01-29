@@ -1,0 +1,119 @@
+#!/bin/bash
+# Ansible managed - MOTD resources section
+# Generated from roles/motd/templates/20-resources.j2
+
+# Load helpers
+source /usr/local/bin/motd-helpers/colors.sh 2>/dev/null || true
+source /usr/local/bin/motd-helpers/formatters.sh 2>/dev/null || true
+
+# Configuration
+APP_DIR="{{ motd_app_directory }}"
+TIMEOUT={{ motd_script_timeout }}
+DISK_WARN={{ motd_disk_warning_threshold }}
+DISK_CRIT={{ motd_disk_critical_threshold }}
+MEM_WARN={{ motd_memory_warning_threshold }}
+MEM_CRIT={{ motd_memory_critical_threshold }}
+UPDATES_WARN={{ motd_total_updates_warning }}
+UPDATES_CRIT={{ motd_total_updates_critical }}
+SEC_UPDATES_WARN={{ motd_security_updates_warning }}
+SEC_UPDATES_CRIT={{ motd_security_updates_critical }}
+
+# Print section header
+print_section_header "RESOURCES"
+
+# System uptime
+if uptime_output=$(timeout "$TIMEOUT" uptime -p 2>/dev/null); then
+    uptime_text=$(echo "$uptime_output" | sed 's/^up //')
+    printf "  %-17s %s\n" "System Uptime:" "$uptime_text"
+else
+    printf "  %-17s %s\n" "System Uptime:" "${YELLOW}${SYM_WARNING}${NC} Unable to check"
+fi
+
+# Application disk usage - check mount point that contains app directory
+if mount_info=$(timeout "$TIMEOUT" df -h "$APP_DIR" 2>/dev/null); then
+    # Get mount point and usage stats
+    mount_point=$(echo "$mount_info" | awk 'NR==2 {print $6}')
+    disk_output=$(echo "$mount_info" | awk 'NR==2 {print $3" "$2" "$5}')
+    read -r used total pct_with_percent <<< "$disk_output"
+    pct="${pct_with_percent%\%}"
+    
+    # Color code percentage
+    if (( pct < DISK_WARN )); then
+        pct_colored="${GREEN}${pct}%${NC}"
+    elif (( pct < DISK_CRIT )); then
+        pct_colored="${YELLOW}${pct}% ${SYM_WARNING}${NC}"
+    else
+        pct_colored="${RED}${pct}% ${SYM_ERROR}${NC}"
+    fi
+    
+    # Show mount point if different from root
+    if [[ "$mount_point" != "/" ]]; then
+        printf "  %-17s %s (%s): %s / %s (%b)\n" "Disk Usage:" "$mount_point" "$APP_DIR" "$used" "$total" "$pct_colored"
+    else
+        printf "  %-17s %s / %s (%b)\n" "Disk Usage:" "$used" "$total" "$pct_colored"
+    fi
+else
+    printf "  %-17s %s\n" "Disk Usage:" "${YELLOW}${SYM_WARNING}${NC} Unable to check"
+fi
+
+# Database size
+if [[ -d "$APP_DIR/data/mysql" ]]; then
+    if db_size=$(timeout "$TIMEOUT" du -sh "$APP_DIR/data/mysql" 2>/dev/null | awk '{print $1}'); then
+        printf "  %-17s %s\n" "Database Size:" "$db_size"
+    else
+        printf "  %-17s %s\n" "Database Size:" "${YELLOW}${SYM_WARNING}${NC} Unable to check"
+    fi
+else
+    printf "  %-17s %s\n" "Database Size:" "N/A (database not initialized)"
+fi
+
+# Memory usage
+if mem_output=$(timeout "$TIMEOUT" free -h 2>/dev/null | awk 'NR==2 {print $3" "$2}'); then
+    read -r used total <<< "$mem_output"
+    
+    # Calculate percentage (need to convert human readable to bytes for accurate calculation)
+    mem_used_bytes=$(free -b 2>/dev/null | awk 'NR==2 {print $3}')
+    mem_total_bytes=$(free -b 2>/dev/null | awk 'NR==2 {print $2}')
+    
+    if [[ -n "$mem_used_bytes" && -n "$mem_total_bytes" ]] && (( mem_total_bytes > 0 )); then
+        mem_pct=$(( 100 * mem_used_bytes / mem_total_bytes ))
+        
+        # Color code percentage
+        if (( mem_pct < MEM_WARN )); then
+            pct_colored="${GREEN}${mem_pct}%${NC}"
+        elif (( mem_pct < MEM_CRIT )); then
+            pct_colored="${YELLOW}${mem_pct}% ${SYM_WARNING}${NC}"
+        else
+            pct_colored="${RED}${mem_pct}% ${SYM_ERROR}${NC}"
+        fi
+        
+        printf "  %-17s %s / %s (%b)\n" "Memory:" "$used" "$total" "$pct_colored"
+    else
+        printf "  %-17s %s / %s\n" "Memory:" "$used" "$total"
+    fi
+else
+    printf "  %-17s %s\n" "Memory:" "${YELLOW}${SYM_WARNING}${NC} Unable to check"
+fi
+
+# APT updates available
+if apt_output=$(timeout "$TIMEOUT" /usr/lib/update-notifier/apt-check 2>&1); then
+    IFS=';' read -r total_updates security_updates <<< "$apt_output"
+    
+    # Color code based on security updates
+    if (( security_updates == 0 )); then
+        sec_colored="${GREEN}${security_updates} security${NC}"
+    elif (( security_updates < SEC_UPDATES_CRIT )); then
+        sec_colored="${YELLOW}${security_updates} security ${SYM_WARNING}${NC}"
+    else
+        sec_colored="${RED}${security_updates} security ${SYM_ERROR}${NC}"
+    fi
+    
+    # Format update message
+    if (( total_updates == 0 )); then
+        printf "  %-17s %b\n" "Updates:" "${GREEN}System up to date ${SYM_SUCCESS}${NC}"
+    else
+        printf "  %-17s %s packages can be updated (%b)\n" "Updates:" "$total_updates" "$sec_colored"
+    fi
+else
+    printf "  %-17s %s\n" "Updates:" "${YELLOW}${SYM_WARNING}${NC} Unable to check"
+fi

@@ -1,0 +1,31 @@
+#!/bin/bash
+{% raw %}
+# Ansible managed - MOTD header
+# Generated from roles/motd/templates/00-header.j2
+
+# Load colors
+source /usr/local/bin/motd-helpers/colors.sh 2>/dev/null || true
+
+# Calculate border padding with overflow protection
+{% endraw %}
+HOSTNAME="{{ motd_hostname }}"
+DOMAIN="{{ motd_domain }}"
+{% raw %}
+TITLE="${HOSTNAME} - ${DOMAIN}"
+TITLE_LEN=${#TITLE}
+BORDER_WIDTH=64
+MAX_TITLE_WIDTH=$((BORDER_WIDTH - 4))  # Leave 2 chars each side for border
+
+# Truncate title if too long
+if (( TITLE_LEN > MAX_TITLE_WIDTH )); then
+    TITLE="${TITLE:0:$((MAX_TITLE_WIDTH - 3))}..."
+    TITLE_LEN=${#TITLE}
+fi
+
+PADDING=$(( (BORDER_WIDTH - TITLE_LEN - 2) / 2 ))
+
+# Print header with centered title
+echo "╔══════════════════════════════════════════════════════════════╗"
+printf "║%*s%s%*s║\n" $PADDING "" "$TITLE" $((BORDER_WIDTH - TITLE_LEN - PADDING - 2)) ""
+echo "╚══════════════════════════════════════════════════════════════╝"
+{% endraw %}

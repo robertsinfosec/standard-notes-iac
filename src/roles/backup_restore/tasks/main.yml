@@ -1,0 +1,90 @@
+---
+# Ansible managed - Standard Notes IaC
+# Backup and restore role tasks
+
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ backup_restore_dir }}"
+    state: directory
+    owner: "{{ backup_restore_user }}"
+    group: "{{ backup_restore_group }}"
+    mode: '0750'
+  become: true
+  tags:
+    - backup
+    - directories
+
+- name: Create backup scripts directory
+  ansible.builtin.file:
+    path: "/usr/local/bin/backup"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  tags:
+    - backup
+    - directories
+
+- name: Copy backup script
+  ansible.builtin.copy:
+    src: sn-backup.sh
+    dest: /usr/local/bin/backup/sn-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  tags:
+    - backup
+    - scripts
+
+- name: Copy backup pruning script
+  ansible.builtin.copy:
+    src: prune-backups.sh
+    dest: /usr/local/bin/backup/prune-backups.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  tags:
+    - backup
+    - scripts
+
+- name: Configure sudoers for backup user
+  ansible.builtin.template:
+    src: backup-sudoers.j2
+    dest: /etc/sudoers.d/99-backup-user
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  become: true
+  tags:
+    - backup
+    - sudoers
+
+- name: Create backup cron job
+  ansible.builtin.cron:
+    name: "Standard Notes backup"
+    minute: "{{ backup_restore_schedule_minute }}"
+    hour: "{{ backup_restore_schedule_hour }}"
+    user: "{{ backup_restore_user }}"
+    job: "/usr/local/bin/backup/sn-backup.sh"
+    cron_file: standard-notes-backup
+  become: true
+  tags:
+    - backup
+    - cron
+
+- name: Create backup pruning cron job
+  ansible.builtin.cron:
+    name: "Standard Notes backup pruning"
+    minute: "30"
+    hour: "{{ backup_restore_schedule_hour }}"
+    user: "{{ backup_restore_user }}"
+    job: "/usr/local/bin/backup/prune-backups.sh {{ backup_restore_retention_days }}"
+    cron_file: standard-notes-backup-prune
+  become: true
+  tags:
+    - backup
+    - cron

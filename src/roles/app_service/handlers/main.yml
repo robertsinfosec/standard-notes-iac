@@ -1,0 +1,11 @@
+---
+# App Service handlers
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart standard-notes
+  ansible.builtin.systemd:
+    name: standard-notes
+    state: restarted

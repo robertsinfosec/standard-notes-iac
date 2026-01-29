@@ -1,0 +1,150 @@
+---
+# Common system setup tasks
+
+# Pre-flight check: Fix interrupted dpkg installations
+# This handles cases where previous package operations were interrupted
+- name: Check if dpkg is interrupted
+  ansible.builtin.command: dpkg --audit
+  register: common_dpkg_audit
+  changed_when: false
+  failed_when: false
+  tags: [apt]
+
+- name: Repair interrupted dpkg installations
+  ansible.builtin.command: dpkg --configure -a
+  when: common_dpkg_audit.stdout | length > 0
+  changed_when: common_dpkg_audit.stdout | length > 0
+  tags: [apt]
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apt]
+
+- name: Upgrade all packages to latest version
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true
+    autoclean: true
+  tags: [apt, upgrade]
+
+- name: Install common system packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+  tags: [packages]
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+  notify: Restart rsyslog
+  tags: [timezone]
+
+- name: Configure NTP (systemd-timesyncd)
+  when: common_ntp_enabled
+  tags: [ntp]
+  block:
+    - name: Create timesyncd.conf.d directory
+      ansible.builtin.file:
+        path: /etc/systemd/timesyncd.conf.d
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Configure NTP servers
+      ansible.builtin.template:
+        src: timesyncd.conf.j2
+        dest: /etc/systemd/timesyncd.conf.d/standard-notes.conf
+        mode: '0644'
+        owner: root
+        group: root
+      notify: Restart timesyncd
+
+- name: Enable and start systemd-timesyncd
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  when: common_ntp_enabled
+  tags: [ntp]
+
+- name: Install and configure unattended-upgrades
+  when: common_unattended_upgrades_mode != 'none'
+  tags: [security, updates]
+  block:
+    - name: Install unattended-upgrades package
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: present
+
+    - name: Configure unattended-upgrades
+      ansible.builtin.template:
+        src: 50unattended-upgrades.j2
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Enable automatic updates
+      ansible.builtin.template:
+        src: 20auto-upgrades.j2
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: '0644'
+        owner: root
+        group: root
+
+- name: Disable swap (best practice for containerized workloads)
+  tags: [performance]
+  block:
+    - name: Disable swap immediately
+      ansible.builtin.command: swapoff -a
+      changed_when: false
+      failed_when: false
+
+    - name: Remove swap from /etc/fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^\s*[^#].*\s+swap\s+'
+        state: absent
+
+- name: Set kernel parameters for production workloads
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-standard-notes.conf
+    reload: true
+  loop:
+    - { key: 'vm.swappiness', value: '10' }
+    - { key: 'vm.vfs_cache_pressure', value: '50' }
+    - { key: 'net.core.somaxconn', value: '65535' }
+    - { key: 'net.ipv4.tcp_max_syn_backlog', value: '8192' }
+    - { key: 'net.ipv4.ip_local_port_range', value: '1024 65535' }
+  tags: [kernel, performance]
+
+- name: Configure bash prompts for all users
+  tags: [shell]
+  block:
+    - name: Deploy custom bash prompt configuration
+      ansible.builtin.copy:
+        src: bashrc-custom.sh
+        dest: /etc/profile.d/bashrc-custom.sh
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Source custom prompt in system-wide bashrc (all users, all shells)
+      ansible.builtin.lineinfile:
+        path: /etc/bash.bashrc
+        line: '[ -f /etc/profile.d/bashrc-custom.sh ] && . /etc/profile.d/bashrc-custom.sh'
+        create: false
+        mode: '0644'
+
+    - name: Source custom prompt in /etc/skel/.bashrc for new users
+      ansible.builtin.lineinfile:
+        path: /etc/skel/.bashrc
+        line: '[ -f /etc/profile.d/bashrc-custom.sh ] && . /etc/profile.d/bashrc-custom.sh'
+        create: true
+        mode: '0644'

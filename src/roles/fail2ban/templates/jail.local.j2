@@ -1,0 +1,18 @@
+# Ansible managed - Standard Notes IaC
+# Fail2Ban global configuration
+
+[DEFAULT]
+# Ban settings
+bantime  = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+
+# Destination email for ban notifications
+destemail = {{ fail2ban_destemail }}
+sender = {{ fail2ban_sender }}
+
+# Action to take when IP is banned
+action = {{ fail2ban_action }}
+
+# Backend for log monitoring
+backend = {{ fail2ban_backend }}

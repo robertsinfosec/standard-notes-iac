@@ -1,0 +1,71 @@
+---
+# SSH hardening tasks
+# Implements SSH security controls per docs/SECURITY_DESIGN.md Section 5
+
+- name: Ensure OpenSSH server is installed
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+
+- name: Backup original sshd_config
+  ansible.builtin.copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config.backup
+    remote_src: true
+    force: false
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Deploy SSH banner
+  ansible.builtin.copy:
+    src: issue.net
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  tags:
+    - ssh-hardening
+    - banner
+
+- name: Configure SSH daemon hardening
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    validate: '/usr/sbin/sshd -t -f %s'
+    backup: true
+  notify: Restart sshd
+
+- name: Ensure SSH host keys have proper permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - /etc/ssh/ssh_host_rsa_key
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ed25519_key
+  failed_when: false
+
+- name: Ensure SSH public keys have proper permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - /etc/ssh/ssh_host_rsa_key.pub
+    - /etc/ssh/ssh_host_ecdsa_key.pub
+    - /etc/ssh/ssh_host_ed25519_key.pub
+  failed_when: false
+
+- name: Enable and start SSH service
+  ansible.builtin.systemd:
+    name: ssh
+    enabled: true
+    state: started

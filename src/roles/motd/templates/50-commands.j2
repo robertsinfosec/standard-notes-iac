@@ -1,0 +1,13 @@
+#!/bin/bash
+# Ansible managed - MOTD quick commands
+# Generated from roles/motd/templates/50-commands.j2
+
+# Load helpers
+source /usr/local/bin/motd-helpers/colors.sh 2>/dev/null || true
+source /usr/local/bin/motd-helpers/formatters.sh 2>/dev/null || true
+
+print_section_header "QUICK COMMANDS"
+
+{% for cmd in motd_quick_commands %}
+printf "  %-15s %s\n" "{{ cmd.label }}:" "{{ cmd.command }}"
+{% endfor %}

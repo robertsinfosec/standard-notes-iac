@@ -1,0 +1,24 @@
+---
+# Fail2Ban role default variables
+# See docs/SECURITY_DESIGN.md for IDS/IPS configuration
+
+# Ban settings
+fail2ban_bantime: 3600
+fail2ban_findtime: 600
+fail2ban_maxretry: 5
+fail2ban_destemail: "root@localhost"
+fail2ban_sender: "fail2ban@{{ ansible_fqdn }}"
+fail2ban_action: "%(action_)s"
+
+# SSH jail configuration
+fail2ban_ssh_enabled: true
+fail2ban_ssh_port: 22
+fail2ban_ssh_maxretry: 3
+fail2ban_ssh_bantime: 86400
+fail2ban_ssh_findtime: 600
+
+# Log paths
+fail2ban_ssh_logpath: "/var/log/auth.log"
+
+# Backend
+fail2ban_backend: systemd

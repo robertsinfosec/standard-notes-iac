@@ -1,0 +1,43 @@
+---
+# App Service role default variables
+# Application deployment configuration
+
+# Standard Notes installation directory
+app_service_install_dir: /opt/standard-notes
+
+# Domain configuration
+app_service_domain: "{{ lookup('env', 'DOMAIN') }}"
+app_service_api_domain: "{{ lookup('env', 'API_DOMAIN') | default(lookup('env', 'DOMAIN'), true) }}"
+
+# Database configuration
+app_service_mysql_root_password: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+app_service_mysql_database: "{{ lookup('env', 'MYSQL_DATABASE') | default('standard_notes_db', true) }}"
+app_service_mysql_user: "{{ lookup('env', 'MYSQL_USER') | default('std_notes_user', true) }}"
+app_service_mysql_password: "{{ lookup('env', 'MYSQL_PASSWORD') }}"
+
+# Redis configuration
+app_service_redis_host: cache
+app_service_redis_port: 6379
+
+# Standard Notes secrets (must be generated)
+app_service_auth_jwt_secret: "{{ lookup('env', 'AUTH_JWT_SECRET') }}"
+app_service_encryption_server_key: "{{ lookup('env', 'ENCRYPTION_SERVER_KEY') }}"
+app_service_valet_token_secret: "{{ lookup('env', 'VALET_TOKEN_SECRET') }}"
+
+# Cloudflare configuration (for Let's Encrypt DNS challenge)
+app_service_cf_dns_api_token: "{{ lookup('env', 'CLOUDFLARE_DNS_API_TOKEN') }}"
+app_service_letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') }}"
+
+# SMTP configuration (optional)
+app_service_smtp_host: "{{ lookup('env', 'SMTP_HOST') | default('', true) }}"
+app_service_smtp_port: "{{ lookup('env', 'SMTP_PORT') | default('587', true) }}"
+app_service_smtp_username: "{{ lookup('env', 'SMTP_USERNAME') | default('', true) }}"
+app_service_smtp_password: "{{ lookup('env', 'SMTP_PASSWORD') | default('', true) }}"
+app_service_smtp_from: "{{ lookup('env', 'SMTP_FROM') | default('noreply@' + app_service_domain, true) }}"
+
+# Service user and group
+app_service_user: service-runner
+app_service_group: standard-notes
+
+# Timezone (inherited from common role)
+app_service_timezone: "{{ common_timezone }}"

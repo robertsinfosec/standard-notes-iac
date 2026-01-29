@@ -1,0 +1,10 @@
+# Ansible managed - Standard Notes IaC
+# Fail2Ban SSH jail configuration
+
+[sshd]
+enabled = {{ 'true' if fail2ban_ssh_enabled else 'false' }}
+port = {{ fail2ban_ssh_port }}
+logpath = {{ fail2ban_ssh_logpath }}
+maxretry = {{ fail2ban_ssh_maxretry }}
+bantime = {{ fail2ban_ssh_bantime }}
+findtime = {{ fail2ban_ssh_findtime }}

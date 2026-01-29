@@ -1,0 +1,24 @@
+---
+# Ansible managed - Standard Notes IaC
+# Backup and restore role default variables
+
+# Backup configuration
+backup_restore_dir: "/var/backups/standard-notes"
+backup_restore_retention_days: 7
+backup_restore_user: "service-backup"
+backup_restore_group: "standard-notes"
+
+# Standard Notes application directory
+backup_restore_app_install_dir: "/opt/standard-notes"
+
+# Backup schedule (cron format)
+backup_restore_schedule_hour: "2"
+backup_restore_schedule_minute: "0"
+
+# Sudoers configuration for backup user
+backup_restore_sudo_commands:
+  - "/usr/bin/docker compose down"
+  - "/usr/bin/docker compose up -d"
+  - "/usr/bin/docker compose ps"
+  - "/usr/local/bin/backup/sn-backup.sh"
+  - "/usr/local/bin/backup/prune-backups.sh"

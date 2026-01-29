@@ -1,0 +1,18 @@
+---
+# Users role default variables
+# See docs/SECURITY_DESIGN.md for user account strategy
+
+# service-deployer: Deployment and administration (full sudo)
+users_service_deployer_username: service-deployer
+users_service_deployer_ssh_key: "{{ lookup('env', 'SERVICE_DEPLOYER_SSH_KEY') }}"
+
+# service-runner: Runs Standard Notes service (limited sudo for systemctl)
+users_service_runner_username: service-runner
+users_service_runner_shell: /bin/bash
+
+# service-backup: Backup operations (limited sudo for backup scripts)
+users_service_backup_username: service-backup
+users_service_backup_shell: /bin/bash
+
+# shared group for application file access
+users_standard_notes_group: standard-notes

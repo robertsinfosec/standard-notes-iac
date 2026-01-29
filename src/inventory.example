@@ -1,0 +1,18 @@
+# Standard Notes Infrastructure-as-Code
+# Ansible Inventory Example
+#
+# Copy this file to inventory.ini and fill in your server details
+
+[standardnotes]
+notes.example.com ansible_user=root ansible_port=22
+
+[standardnotes:vars]
+# Python interpreter (Ubuntu 24.04 default)
+ansible_python_interpreter=/usr/bin/python3
+
+# SSH connection settings
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+# Become settings
+ansible_become=yes
+ansible_become_method=sudo

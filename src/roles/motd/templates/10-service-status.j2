@@ -1,0 +1,167 @@
+#!/bin/bash
+# Ansible managed - MOTD service status
+# Generated from roles/motd/templates/10-service-status.j2
+
+# Load helpers
+source /usr/local/bin/motd-helpers/colors.sh 2>/dev/null || true
+source /usr/local/bin/motd-helpers/formatters.sh 2>/dev/null || true
+
+# Configuration
+COMPOSE_FILE="{{ motd_compose_file }}"
+SYSTEMD_SERVICE="{{ motd_systemd_service }}"
+TIMEOUT={{ motd_script_timeout }}
+
+# Print section header
+print_section_header "SERVICE STATUS"
+
+# Track if we have any running containers for mismatch detection
+running_container_count=0
+
+# Function to format container status
+format_container_status() {
+    local name=$1
+    local state=$2
+    local health=$3
+    local uptime=$4
+    
+    local symbol status_text
+    
+    case "$state" in
+        running)
+            case "$health" in
+                healthy)
+                    symbol="${GREEN}${SYM_SUCCESS}${NC}"
+                    status_text="${GREEN}Running (healthy)${NC}"
+                    ;;
+                unhealthy)
+                    symbol="${RED}${SYM_ERROR}${NC}"
+                    status_text="${RED}Running (unhealthy)${NC}"
+                    ;;
+                starting)
+                    symbol="${YELLOW}${SYM_WARNING}${NC}"
+                    status_text="${YELLOW}Starting${NC}"
+                    ;;
+                *)
+                    symbol="${YELLOW}${SYM_WARNING}${NC}"
+                    status_text="${YELLOW}Running (no health)${NC}"
+                    ;;
+            esac
+            ;;
+        exited|dead)
+            symbol="${RED}${SYM_ERROR}${NC}"
+            status_text="${RED}Stopped${NC}"
+            uptime="-"
+            ;;
+        restarting)
+            symbol="${YELLOW}${SYM_WARNING}${NC}"
+            status_text="${YELLOW}Restarting${NC}"
+            ;;
+        *)
+            symbol="${YELLOW}${SYM_WARNING}${NC}"
+            status_text="${YELLOW}Unknown${NC}"
+            ;;
+    esac
+    
+    printf "  %-15s %b %-25b %s\n" "$name:" "$symbol" "$status_text" "$uptime"
+}
+
+# Check Docker containers
+if ! docker_output=$(timeout "$TIMEOUT" docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null); then
+    echo -e "  ${YELLOW}${SYM_WARNING}${NC} Unable to check containers (docker unavailable)"
+elif [[ -z "$docker_output" || "$docker_output" == "[]" || "$docker_output" == "null" ]]; then
+    # No containers running - service is down
+    {% raw %}{% endraw %}{% for service in motd_services %}
+    printf "  %-15s %b %-25b %s\\n" "{{ service.name }}:" "${RED}${SYM_ERROR}${NC}" "${RED}Missing${NC}" "-"
+    {% endfor %}
+    running_container_count=0
+else
+    # Parse JSON output and display each configured service
+{% for service in motd_services %}
+    # Match by Service field from docker compose JSON (newline-delimited, so slurp with -s)
+    container_data=$(echo "$docker_output" | jq -s -r '.[] | select(.Service=="{{ service.service }}") | "\(.State)|\(.Health)|\(.Status)"' 2>/dev/null | head -1)
+    
+    if [[ -n "$container_data" ]]; then
+        IFS='|' read -r state health status <<< "$container_data"
+        
+        # Extract uptime from status (e.g., "Up 5 hours (healthy)")
+        uptime=$(echo "$status" | sed -E 's/^Up ([^(]+).*/\1/' | xargs)
+        [[ "$uptime" == "$status" ]] && uptime="-"
+        
+        # Count running containers
+        [[ "$state" == "running" ]] && ((running_container_count++))
+        
+        format_container_status "{{ service.name }}" "$state" "$health" "$uptime"
+    else
+{% if service.optional | default(false) %}
+        # Optional service not running - show as informational
+        printf "  %-15s %b %-25b %s\n" "{{ service.name }}:" "${CYAN}-${NC}" "${CYAN}Not deployed${NC}" "-"
+{% else %}
+        # Required service missing - show as error
+        printf "  %-15s %b %-25b %s\n" "{{ service.name }}:" "${RED}${SYM_ERROR}${NC}" "${RED}Missing${NC}" "-"
+{% endif %}
+    fi
+{% endfor %}
+fi
+
+# Add separator before systemd status
+echo "  $(printf '%.0s-' {1..60})"
+
+# Check systemd service
+if systemd_output=$(timeout "$TIMEOUT" systemctl show "$SYSTEMD_SERVICE" -p ActiveState,SubState,ExecMainStartTimestamp 2>/dev/null); then
+    active_state=$(echo "$systemd_output" | grep "^ActiveState=" | cut -d= -f2)
+    sub_state=$(echo "$systemd_output" | grep "^SubState=" | cut -d= -f2)
+    start_time=$(echo "$systemd_output" | grep "^ExecMainStartTimestamp=" | cut -d= -f2-)
+    
+    # Calculate uptime if service is active
+    uptime_text="-"
+    if [[ "$active_state" == "active" && -n "$start_time" && "$start_time" != "n/a" ]]; then
+        start_epoch=$(date -d "$start_time" +%s 2>/dev/null)
+        now_epoch=$(date +%s)
+        if [[ -n "$start_epoch" ]] && (( start_epoch > 0 )); then
+            uptime_seconds=$((now_epoch - start_epoch))
+            
+            if (( uptime_seconds < 3600 )); then
+                minutes=$((uptime_seconds / 60))
+                uptime_text="${minutes}m"
+            elif (( uptime_seconds < 86400 )); then
+                hours=$((uptime_seconds / 3600))
+                minutes=$(((uptime_seconds % 3600) / 60))
+                uptime_text="${hours}h ${minutes}m"
+            else
+                days=$((uptime_seconds / 86400))
+                hours=$(((uptime_seconds % 86400) / 3600))
+                uptime_text="${days}d ${hours}h"
+            fi
+        fi
+    fi
+    
+    # Format systemd status
+    case "$active_state" in
+        active)
+            symbol="${GREEN}${SYM_SUCCESS}${NC}"
+            status_text="${GREEN}${active_state} (${sub_state})${NC}"
+            ;;
+        activating|reloading)
+            symbol="${YELLOW}${SYM_WARNING}${NC}"
+            status_text="${YELLOW}${active_state}${NC}"
+            ;;
+        inactive|failed|deactivating)
+            symbol="${RED}${SYM_ERROR}${NC}"
+            status_text="${RED}${active_state} (${sub_state})${NC}"
+            ;;
+        *)
+            symbol="${YELLOW}${SYM_WARNING}${NC}"
+            status_text="${YELLOW}${active_state}${NC}"
+            ;;
+    esac
+    
+    printf "  %-15s %b %-25b %s\n" "Systemd Unit:" "$symbol" "$status_text" "$uptime_text"
+    
+    # Critical mismatch: systemd active but no containers running
+    if [[ "$active_state" == "active" ]] && (( running_container_count == 0 )); then
+        echo ""
+        echo -e "  ${RED}${SYM_ERROR}${SYM_ERROR}${SYM_ERROR} CRITICAL: Systemd active but containers not running ${SYM_ERROR}${SYM_ERROR}${SYM_ERROR}${NC}"
+    fi
+else
+    echo -e "  Systemd Unit:   ${YELLOW}${SYM_WARNING}${NC} Unable to check"
+fi

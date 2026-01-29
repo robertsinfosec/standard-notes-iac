@@ -1,0 +1,7 @@
+---
+# SSH hardening handlers
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted

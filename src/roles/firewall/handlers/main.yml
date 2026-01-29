@@ -1,0 +1,7 @@
+---
+# Firewall (UFW) handlers
+
+- name: Reload ufw
+  ansible.builtin.systemd:
+    name: ufw
+    state: restarted
